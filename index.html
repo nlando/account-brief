@@ -71,16 +71,18 @@
 
   async function generateBrief() {
     const org = document.getElementById('orgInput').value.trim();
+    const errorEl = document.getElementById('errorMsg');
+    const resultsContainer = document.getElementById('resultsContainer');
     if (!org) return;
 
+    errorEl.classList.remove('active');
     document.getElementById('loading').classList.add('active');
     document.getElementById('emptyState').style.display = 'none';
-    document.getElementById('resultsContainer').innerHTML = '';
+    resultsContainer.innerHTML = '';
 
     const prompt = `You are an elite B2B sales analyst. Use Google Search to research "${org}". 
     Find their recent financials (990 for nonprofits, 10-K for public companies), current strategic goals, and tech stack.
-    Return ONLY a JSON object with these keys: org_name, org_overview, org_goals, financials, tech_stack, open_with, likely_objection.
-    Make the info specific and data-driven.`;
+    Return ONLY a JSON object with these keys: org_name, org_overview, org_goals, financials, tech_stack, open_with, likely_objection.`;
 
     try {
       const response = await fetch(PROXY_URL, {
@@ -88,18 +90,33 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search_retrieval: {} }]
+          tools: [{ google_search_retrieval: { dynamic_retrieval_config: { mode: "unspecified", dynamic_threshold: 0.06 } } }]
         })
       });
 
       const data = await response.json();
+
+      // Check if candidates[0] exists to avoid the 'reading 0' error
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        // Check for safety blocks
+        if (data.promptFeedback?.blockReason) {
+          throw new Error(`Blocked by safety filters: ${data.promptFeedback.blockReason}`);
+        }
+        throw new Error("No response from AI. Try a different company name.");
+      }
+
       const text = data.candidates[0].content.parts[0].text;
-      const cleanJson = JSON.parse(text.replace(/```json|```/g, ''));
       
+      // Better JSON extraction in case the AI includes markdown backticks
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("AI response was not in the correct format.");
+      
+      const cleanJson = JSON.parse(jsonMatch[0]);
       renderBrief(cleanJson);
+      
     } catch (err) {
-      document.getElementById('errorMsg').textContent = "Error: " + err.message;
-      document.getElementById('errorMsg').classList.add('active');
+      errorEl.textContent = "Error: " + err.message;
+      errorEl.classList.add('active');
     } finally {
       document.getElementById('loading').classList.remove('active');
     }
@@ -108,6 +125,7 @@
   function renderBrief(brief) {
     const container = document.getElementById('resultsContainer');
     const sections = [
+      { t: "Organization", b: brief.org_name },
       { t: "Overview", b: brief.org_overview },
       { t: "Strategic Goals", b: brief.org_goals },
       { t: "Financials", b: brief.financials },
@@ -117,12 +135,13 @@
     ];
 
     sections.forEach(s => {
-      const card = document.createElement('div');
-      card.className = 'result-card';
-      card.innerHTML = `<div class="result-title">${s.t}</div><div class="result-body">${s.b}</div>`;
-      container.appendChild(card);
+      if(s.b) {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.innerHTML = `<div class="result-title">${s.t}</div><div class="result-body">${s.b}</div>`;
+        container.appendChild(card);
+      }
     });
-  }
 </script>
 </body>
 </html>
