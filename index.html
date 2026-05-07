@@ -15,7 +15,6 @@
   .brand { font-family: 'Google Sans', arial, sans-serif; font-size: 22px; font-weight: 500; color: var(--text-muted); margin-bottom: 16px; }
   .search-bar { display: flex; align-items: center; background: #fff; border: 1px solid var(--border); border-radius: 24px; padding: 8px 8px 8px 20px; transition: box-shadow 0.2s, border-color 0.2s; margin-bottom: 12px; }
   .search-bar:hover, .search-bar:focus-within { box-shadow: var(--shadow-md); border-color: transparent; }
-  .search-icon { color: #9aa0a6; flex-shrink: 0; margin-right: 12px; }
   .search-input { flex: 1; border: none; outline: none; font-size: 16px; color: var(--text); background: transparent; }
   .search-btn { flex-shrink: 0; background: var(--blue); border: none; border-radius: 20px; padding: 8px 20px; color: #fff; font-family: 'Google Sans'; font-size: 14px; font-weight: 500; cursor: pointer; }
   .fields-toggle { font-size: 13px; color: var(--blue); cursor: pointer; padding: 4px 0 12px; border: none; background: none; }
@@ -25,12 +24,12 @@
   .field-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
   .field-input { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; outline: none; }
   .results-area { max-width: 690px; margin: 0 auto; padding: 0 20px; }
-  .loading { display: none; padding: 40px 0; text-align: center; }
+  .loading { display: none; padding: 40px 0; text-align: center; font-size: 14px; color: #70757a; }
   .loading.active { display: block; }
   .result-card { padding: 20px 0; border-bottom: 1px solid #ebebeb; }
   .result-title { font-family: 'Google Sans'; font-size: 20px; color: var(--text-url); margin-bottom: 6px; }
   .result-body { font-size: 14px; line-height: 1.58; color: var(--text-secondary); }
-  .error-msg { display: none; background: #fce8e6; color: #c5221f; padding: 12px; border-radius: 8px; margin-top: 16px; }
+  .error-msg { display: none; background: #fce8e6; color: #c5221f; padding: 12px; border-radius: 8px; margin-top: 16px; font-size: 14px; }
   .error-msg.active { display: block; }
   .empty-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
 </style>
@@ -46,17 +45,17 @@
     </div>
     <button class="fields-toggle" onclick="toggleFields()">▸ Add details</button>
     <div class="extra-fields" id="extraFields">
-      <div class="field-group"><span class="field-label">Who you're meeting</span><input class="field-input" id="roleInput" placeholder="e.g. CTO" /></div>
-      <div class="field-group"><span class="field-label">Context</span><textarea class="field-input" id="contextInput" placeholder="Past conversations..."></textarea></div>
+      <div class="field-group"><span class="field-label">Who meeting</span><input class="field-input" id="roleInput" placeholder="CTO" /></div>
+      <div class="field-group"><span class="field-label">Context</span><textarea class="field-input" id="contextInput"></textarea></div>
     </div>
   </div>
 </div>
 
 <div class="results-area">
-  <div class="error-msg" id="errorMsg"></div>
-  <div class="loading" id="loading">Researching... this takes about 20 seconds.</div>
+  <div id="errorMsg" class="error-msg"></div>
+  <div id="loading" class="loading">Researching... this takes about 20 seconds.</div>
   <div id="resultsContainer">
-    <div class="empty-state" id="emptyState">Enter a company name to build a brief.</div>
+    <div id="emptyState" class="empty-state">Enter a company name to build a brief.</div>
   </div>
 </div>
 
@@ -64,32 +63,25 @@
   const PROXY_URL = 'https://account-brief.nicklandon-co-43b.workers.dev/';
 
   function toggleFields() {
-    const el = document.getElementById('extraFields');
-    el.classList.toggle('open');
+    document.getElementById('extraFields').classList.toggle('open');
   }
 
-  // 1. ADD THE ENTER KEY LISTENER HERE (Outside of functions)
-  document.getElementById('orgInput').addEventListener('keydown', function(event) {
-    if (event.key === 'Enter') {
-      event.preventDefault(); 
-      generateBrief(); 
-    }
+  // Listen for Enter key
+  document.getElementById('orgInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); generateBrief(); }
   });
 
   async function generateBrief() {
     const org = document.getElementById('orgInput').value.trim();
-    const errorEl = document.getElementById('errorMsg');
-    const resultsContainer = document.getElementById('resultsContainer');
     if (!org) return;
 
-    errorEl.classList.remove('active');
+    // Reset UI
+    document.getElementById('errorMsg').classList.remove('active');
     document.getElementById('loading').classList.add('active');
     document.getElementById('emptyState').style.display = 'none';
-    resultsContainer.innerHTML = '';
+    document.getElementById('resultsContainer').innerHTML = '';
 
-    const prompt = `You are an elite B2B sales analyst. Use Google Search to research "${org}". 
-    Find their recent financials (990 for nonprofits, 10-K for public companies), current strategic goals, and tech stack.
-    Return ONLY a JSON object with these keys: org_name, org_overview, org_goals, financials, tech_stack, open_with, likely_objection.`;
+    const prompt = `Research "${org}". Provide a B2B brief as JSON with: org_name, org_overview, org_goals, financials, tech_stack, open_with, likely_objection.`;
 
     try {
       const response = await fetch(PROXY_URL, {
@@ -97,29 +89,26 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search_retrieval: { dynamic_retrieval_config: { mode: "unspecified", dynamic_threshold: 0.06 } } }]
+          tools: [{ google_search_retrieval: {} }]
         })
       });
 
       const data = await response.json();
-
-      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-        if (data.promptFeedback?.blockReason) {
-          throw new Error(`Blocked by safety filters: ${data.promptFeedback.blockReason}`);
-        }
-        throw new Error("No response from AI. Try a different company name.");
+      
+      if (!data.candidates || !data.candidates[0]) {
+         throw new Error("No response from AI. Ensure Google Search is ON in AI Studio.");
       }
 
       const text = data.candidates[0].content.parts[0].text;
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("AI response was not in the correct format.");
-      
       const cleanJson = JSON.parse(jsonMatch[0]);
+      
       renderBrief(cleanJson);
       
     } catch (err) {
-      errorEl.textContent = "Error: " + err.message;
-      errorEl.classList.add('active');
+      const errBox = document.getElementById('errorMsg');
+      errBox.textContent = "Error: " + err.message;
+      errBox.classList.add('active');
     } finally {
       document.getElementById('loading').classList.remove('active');
     }
@@ -130,20 +119,18 @@
     const sections = [
       { t: "Organization", b: brief.org_name },
       { t: "Overview", b: brief.org_overview },
-      { t: "Strategic Goals", b: brief.org_goals },
+      { t: "Goals", b: brief.org_goals },
       { t: "Financials", b: brief.financials },
-      { t: "Tech Stack", b: brief.tech_stack },
-      { t: "Opening Line", b: brief.open_with },
-      { t: "Likely Objection", b: brief.likely_objection }
+      { t: "Tech", b: brief.tech_stack },
+      { t: "Opener", b: brief.open_with },
+      { t: "Objection", b: brief.likely_objection }
     ];
 
     sections.forEach(s => {
-      if(s.b) {
-        const card = document.createElement('div');
-        card.className = 'result-card';
-        card.innerHTML = `<div class="result-title">${s.t}</div><div class="result-body">${s.b}</div>`;
-        container.appendChild(card);
-      }
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      card.innerHTML = `<div class="result-title">${s.t}</div><div class="result-body">${s.b}</div>`;
+      container.appendChild(card);
     });
   }
 </script>
