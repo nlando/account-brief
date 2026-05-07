@@ -61,13 +61,20 @@
 </div>
 
 <script>
-  // YOUR CLOUDFLARE URL
   const PROXY_URL = 'https://account-brief.nicklandon-co-43b.workers.dev/';
 
   function toggleFields() {
     const el = document.getElementById('extraFields');
     el.classList.toggle('open');
   }
+
+  // 1. ADD THE ENTER KEY LISTENER HERE (Outside of functions)
+  document.getElementById('orgInput').addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault(); 
+      generateBrief(); 
+    }
+  });
 
   async function generateBrief() {
     const org = document.getElementById('orgInput').value.trim();
@@ -96,9 +103,7 @@
 
       const data = await response.json();
 
-      // Check if candidates[0] exists to avoid the 'reading 0' error
       if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-        // Check for safety blocks
         if (data.promptFeedback?.blockReason) {
           throw new Error(`Blocked by safety filters: ${data.promptFeedback.blockReason}`);
         }
@@ -106,8 +111,6 @@
       }
 
       const text = data.candidates[0].content.parts[0].text;
-      
-      // Better JSON extraction in case the AI includes markdown backticks
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error("AI response was not in the correct format.");
       
@@ -142,15 +145,7 @@
         container.appendChild(card);
       }
     });
-    // This tells the browser to listen for the "Enter" key on the input field
-document.getElementById('orgInput').addEventListener('keydown', function(event) {
-  if (event.key === 'Enter') {
-    // This prevents the page from refreshing (the default browser behavior)
-    event.preventDefault(); 
-    // This triggers the same function as clicking the blue Search button
-    generateBrief(); 
   }
-});
 </script>
 </body>
 </html>
