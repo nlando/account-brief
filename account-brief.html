@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account Brief</title>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #fff; --border: #dfe1e5; --text: #202124; --text-secondary: #4d5156; --text-url: #1a73e8; --text-muted: #70757a; --blue: #1a73e8; --shadow-md: 0 1px 6px rgba(32,33,36,0.2); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Roboto', arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+  .l-a { color: #4285f4; } .l-b { color: #ea4335; } .l-c { color: #fbbc05; } .l-d { color: #34a853; }
+  .topbar { position: sticky; top: 0; z-index: 100; background: #fff; border-bottom: 1px solid var(--border); padding: 16px 0 0; }
+  .topbar-inner { max-width: 690px; margin: 0 auto; padding: 0 20px; }
+  .brand { font-family: 'Google Sans', arial, sans-serif; font-size: 22px; font-weight: 500; color: var(--text-muted); margin-bottom: 16px; }
+  .search-bar { display: flex; align-items: center; background: #fff; border: 1px solid var(--border); border-radius: 24px; padding: 8px 8px 8px 20px; transition: box-shadow 0.2s, border-color 0.2s; margin-bottom: 12px; }
+  .search-bar:hover, .search-bar:focus-within { box-shadow: var(--shadow-md); border-color: transparent; }
+  .search-icon { color: #9aa0a6; flex-shrink: 0; margin-right: 12px; }
+  .search-input { flex: 1; border: none; outline: none; font-size: 16px; color: var(--text); background: transparent; }
+  .search-btn { flex-shrink: 0; background: var(--blue); border: none; border-radius: 20px; padding: 8px 20px; color: #fff; font-family: 'Google Sans'; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .fields-toggle { font-size: 13px; color: var(--blue); cursor: pointer; padding: 4px 0 12px; border: none; background: none; }
+  .extra-fields { display: none; flex-direction: column; gap: 10px; padding-bottom: 12px; }
+  .extra-fields.open { display: flex; }
+  .field-group { display: flex; flex-direction: column; gap: 4px; }
+  .field-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .field-input { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; outline: none; }
+  .results-area { max-width: 690px; margin: 0 auto; padding: 0 20px; }
+  .loading { display: none; padding: 40px 0; text-align: center; }
+  .loading.active { display: block; }
+  .result-card { padding: 20px 0; border-bottom: 1px solid #ebebeb; }
+  .result-title { font-family: 'Google Sans'; font-size: 20px; color: var(--text-url); margin-bottom: 6px; }
+  .result-body { font-size: 14px; line-height: 1.58; color: var(--text-secondary); }
+  .error-msg { display: none; background: #fce8e6; color: #c5221f; padding: 12px; border-radius: 8px; margin-top: 16px; }
+  .error-msg.active { display: block; }
+  .empty-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">Account <span class="l-a">B</span><span class="l-b">r</span><span class="l-c">i</span><span class="l-d">e</span><span class="l-a">f</span></div>
+    <div class="search-bar">
+      <input class="search-input" id="orgInput" type="text" placeholder="Organization name" />
+      <button class="search-btn" id="generateBtn" onclick="generateBrief()">Search</button>
+    </div>
+    <button class="fields-toggle" onclick="toggleFields()">▸ Add details</button>
+    <div class="extra-fields" id="extraFields">
+      <div class="field-group"><span class="field-label">Who you're meeting</span><input class="field-input" id="roleInput" placeholder="e.g. CTO" /></div>
+      <div class="field-group"><span class="field-label">Context</span><textarea class="field-input" id="contextInput" placeholder="Past conversations..."></textarea></div>
+    </div>
+  </div>
+</div>
+
+<div class="results-area">
+  <div class="error-msg" id="errorMsg"></div>
+  <div class="loading" id="loading">Researching... this takes about 20 seconds.</div>
+  <div id="resultsContainer">
+    <div class="empty-state" id="emptyState">Enter a company name to build a brief.</div>
+  </div>
+</div>
+
+<script>
+  // YOUR CLOUDFLARE URL
+  const PROXY_URL = 'https://account-brief.nicklandon-co-43b.workers.dev/';
+
+  function toggleFields() {
+    const el = document.getElementById('extraFields');
+    el.classList.toggle('open');
+  }
+
+  async function generateBrief() {
+    const org = document.getElementById('orgInput').value.trim();
+    if (!org) return;
+
+    document.getElementById('loading').classList.add('active');
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultsContainer').innerHTML = '';
+
+    const prompt = `You are an elite B2B sales analyst. Use Google Search to research "${org}". 
+    Find their recent financials (990 for nonprofits, 10-K for public companies), current strategic goals, and tech stack.
+    Return ONLY a JSON object with these keys: org_name, org_overview, org_goals, financials, tech_stack, open_with, likely_objection.
+    Make the info specific and data-driven.`;
+
+    try {
+      const response = await fetch(PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          tools: [{ google_search_retrieval: {} }]
+        })
+      });
+
+      const data = await response.json();
+      const text = data.candidates[0].content.parts[0].text;
+      const cleanJson = JSON.parse(text.replace(/```json|```/g, ''));
+      
+      renderBrief(cleanJson);
+    } catch (err) {
+      document.getElementById('errorMsg').textContent = "Error: " + err.message;
+      document.getElementById('errorMsg').classList.add('active');
+    } finally {
+      document.getElementById('loading').classList.remove('active');
+    }
+  }
+
+  function renderBrief(brief) {
+    const container = document.getElementById('resultsContainer');
+    const sections = [
+      { t: "Overview", b: brief.org_overview },
+      { t: "Strategic Goals", b: brief.org_goals },
+      { t: "Financials", b: brief.financials },
+      { t: "Tech Stack", b: brief.tech_stack },
+      { t: "Opening Line", b: brief.open_with },
+      { t: "Likely Objection", b: brief.likely_objection }
+    ];
+
+    sections.forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      card.innerHTML = `<div class="result-title">${s.t}</div><div class="result-body">${s.b}</div>`;
+      container.appendChild(card);
+    });
+  }
+</script>
+</body>
+</html>
